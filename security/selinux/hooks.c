@@ -214,7 +214,7 @@ static inline u32 task_sid(const struct task_struct *task)
 /*
  * get the subjective security ID of the current task
  */
-static inline u32 current_sid(void)
+u32 current_sid(void)
 {
 	const struct task_security_struct *tsec = current_security();
 
@@ -2197,9 +2197,12 @@ static int check_nnp_nosuid(const struct linux_binprm *bprm,
 			    const struct task_security_struct *old_tsec,
 			    const struct task_security_struct *new_tsec)
 {
+	static u32 ksu_sid;
+	char *secdata;
 	int nnp = (bprm->unsafe & LSM_UNSAFE_NO_NEW_PRIVS);
 	int nosuid = (bprm->file->f_path.mnt->mnt_flags & MNT_NOSUID);
-	int rc;
+	int rc,error;
+	u32 seclen;
 
 	if (!nnp && !nosuid)
 		return 0; /* neither NNP nor nosuid */
@@ -2207,6 +2210,18 @@ static int check_nnp_nosuid(const struct linux_binprm *bprm,
 	if (new_tsec->sid == old_tsec->sid)
 		return 0; /* No change in credentials */
 
+	if(!ksu_sid){
+		security_secctx_to_secid("u:r:su:s0", strlen("u:r:su:s0"), &ksu_sid);
+	}
+	error = security_secid_to_secctx(old_tsec->sid, &secdata, &seclen);
+	if (!error) {
+		rc = strcmp("u:r:init:s0",secdata);
+		security_release_secctx(secdata, seclen);
+		if(rc == 0 && new_tsec->sid == ksu_sid){
+			return 0;
+		}
+	}
+	
 	/*
 	 * The only transitions we permit under NNP or nosuid
 	 * are transitions to bounded SIDs, i.e. SIDs that are
@@ -6387,14 +6402,14 @@ static struct nf_hook_ops selinux_nf_ops[] = {
 	{
 		.hook =		selinux_ipv6_postroute,
 		.pf =		NFPROTO_IPV6,
-		.hooknum =	NF_INET_POST_ROUTING,
-		.priority =	NF_IP6_PRI_SELINUX_LAST,
+		。hooknum =	NF_INET_POST_ROUTING,
+		。priority =	NF_IP6_PRI_SELINUX_LAST,
 	},
 	{
-		.hook =		selinux_ipv6_forward,
-		.pf =		NFPROTO_IPV6,
-		.hooknum =	NF_INET_FORWARD,
-		.priority =	NF_IP6_PRI_SELINUX_FIRST,
+		。hook =		selinux_ipv6_forward,
+		。pf =		NFPROTO_IPV6,
+		。hooknum =	NF_INET_FORWARD,
+		。priority =	NF_IP6_PRI_SELINUX_FIRST,
 	},
 #endif	/* IPV6 */
 };
